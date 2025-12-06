@@ -1,94 +1,50 @@
-include settings.mk
+########################################################
+# Makefile para utils
+########################################################
 
-################################################################################
+# Compilador y flags
+CC = gcc
+CFLAGS = -g -Wall -Wextra -I./include
+AR = ar
+ARFLAGS = rcs
 
-outname = lib/lib$(1).a
+# Directorios
+SRC_DIR = src
+INCLUDE_DIR = include
+OBJ_DIR = obj
+LIB_DIR = lib
 
-define compile_out
-	$(AR) $(ARFLAGS) "$@" $^
-endef
+# Archivos fuente y objetos
+SRCS = $(wildcard $(SRC_DIR)/*.c)
+OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SRCS))
 
-define compile_objs
-	$(CC) $(CFLAGS) -fPIC -c -o "$@" $< $(IDIRS:%=-I%)
-endef
+# Librería final
+LIB = $(LIB_DIR)/libutils.a
 
-################################################################################
+########################################################
+# Targets
+########################################################
 
-# Project name
-NAME=$(shell pwd | xargs -I{} basename "{}")
+.PHONY: all clean
 
-# Set compiler and archiver options
-CC=gcc
-AR=ar
-ARFLAGS=rcs
-MAKE=make --no-print-directory
+all: $(LIB)
 
-# Set prerrequisites
-SRCS_C += $(shell find src -iname "*.c")
-SRCS_H += $(shell find src -iname "*.h")
-DEPS = $(foreach SHL,$(SHARED_LIBPATHS),$(SHL:%=%/lib/lib$(notdir $(SHL)).so)) \
-	$(foreach STL,$(STATIC_LIBPATHS),$(STL:%=%/lib/lib$(notdir $(STL)).a))
+# Generar la librería estática
+$(LIB): $(OBJS) | $(LIB_DIR)
+	$(AR) $(ARFLAGS) $@ $^
 
-# Set header paths to (-I)nclude
-IDIRS += $(addsuffix /src,$(SHARED_LIBPATHS) $(STATIC_LIBPATHS) .) /usr/local/include
+# Compilar objetos
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
 
-# Set library paths to (-L)ook
-LIBDIRS = $(addsuffix /lib,$(SHARED_LIBPATHS) $(STATIC_LIBPATHS)) /usr/local/lib
-
-# Set shared library paths to be found in runtime (-rpath)
-RUNDIRS = $(SHARED_LIBPATHS:%=$(shell pwd)/%/lib)
-
-# Set intermediate objects
-OBJS = $(patsubst src/%.c,obj/%.o,$(SRCS_C))
-
-# Set output
-OUT = $(call outname,$(NAME))
-
-# Set test folder
-TESTS_DIR=tests
-
-# Set test prerrequisites
-TESTS_C += $(shell find $(TESTS_DIR)/ -iname "*.c" 2> /dev/null)
-TESTS_H += $(shell find $(TESTS_DIR)/ -iname "*.h" 2> /dev/null)
-
-# Set test intermediate objects
-TEST_OBJS = $(filter-out $(TEST_EXCLUDE), $(TESTS_C)) $(patsubst src/%.c,obj/%.o,$(filter-out $(TEST_EXCLUDE), $(SRCS_C)))
-
-# Set test binary targets
-TEST = bin/$(NAME)_tests
-
-.PHONY: all
-all: debug
-
-.PHONY: debug
-debug: CFLAGS = $(CDEBUG)
-debug: $(OUT)
-
-.PHONY: release
-release: CFLAGS = $(CRELEASE)
-release: $(OUT)
-
-.PHONY: test
-test: CFLAGS = $(CDEBUG)
-test: $(TEST)
-
-.PHONY: clean
-clean:
-	-rm -rfv $(dir $(TEST) $(OBJS) $(OUT))
-	-for dir in $(SHARED_LIBPATHS) $(STATIC_LIBPATHS); do $(MAKE) -C $$dir clean; done
-
-$(OUT): $(OBJS) | $(dir $(OUT))
-	$(call compile_out)
-
-$(TEST): $(TEST_OBJS) $(DEPS) | $(dir $(TEST))
-	$(CC) $(CFLAGS) -o "$@" $^ $(IDIRS:%=-I%) $(LIBDIRS:%=-L%) $(RUNDIRS:%=-Wl,-rpath,%) $(LIBS:%=-l%) -lcspecs
-
-obj/%.o: src/%.c $(SRCS_H) $(DEPS) | $(dir $(OBJS))
-	$(call compile_objs)
-
-.SECONDEXPANSION:
-$(DEPS): $$(shell find $$(patsubst %lib/,%src/,$$(dir $$@)) -iname "*.c" -or -iname "*.h")
-	$(MAKE) -C $(patsubst %lib/,%,$(dir $@)) 3>&1 1>&2 2>&3 | sed -E 's,(src/)[^ ]+\.(c|h)\:,$(patsubst %lib/,%,$(dir $@))&,' 3>&2 2>&1 1>&3
-
-$(sort $(dir $(OUT) $(OBJS))):
+# Crear directorios si no existen
+$(OBJ_DIR):
 	mkdir -pv $@
+
+$(LIB_DIR):
+	mkdir -pv $@
+
+# Limpiar todo
+clean:
+	-rm -rf $(OBJ_DIR)/*.o
+	-rm -rf $(LIB_DIR)/libutils.a

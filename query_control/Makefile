@@ -1,94 +1,51 @@
-include settings.mk
+# Makefile para Query Control
 
-################################################################################
+CC = gcc
+CFLAGS = -g -Wall -Wextra -I./include -I../utils/include
+LDFLAGS = -lcommons -lpthread -lreadline -lcrypto
 
-outname = bin/$(1)
+# Directorios
+SRC_DIR = src
+OBJ_DIR = obj
+BIN_DIR = bin
+INCLUDE_DIR = include
+UTILS_DIR = ../utils/src
+UTILS_INCLUDE_DIR = ../utils/include
 
-define compile_out
-	$(CC) $(CFLAGS) -o "$@" $^ $(IDIRS:%=-I%) $(LIBDIRS:%=-L%) $(RUNDIRS:%=-Wl,-rpath,%) $(LIBS:%=-l%)
-endef
+# Archivos
+TARGET = $(BIN_DIR)/query
 
-define compile_objs
-	$(CC) $(CFLAGS) -c -o "$@" $< $(IDIRS:%=-I%)
-endef
+OBJECTS = \
+    $(OBJ_DIR)/query.o \
+    $(OBJ_DIR)/cliente.o \
+    $(OBJ_DIR)/server.o \
+    $(OBJ_DIR)/conexion.o
 
-################################################################################
+# Regla principal
+all: directories $(TARGET)
 
-# Project name
-NAME=$(shell pwd | xargs -I{} basename "{}")
+directories:
+	@mkdir -p $(OBJ_DIR)
+	@mkdir -p $(BIN_DIR)
 
-# Set compiler and archiver options
-CC=gcc
-AR=ar
-ARFLAGS=rcs
-MAKE=make --no-print-directory
+$(TARGET): $(OBJECTS)
+	$(CC) $(OBJECTS) -o $(TARGET) $(LDFLAGS)
+	@echo "Query Control compilado exitosamente"
 
-# Set prerrequisites
-SRCS_C += $(shell find src -iname "*.c")
-SRCS_H += $(shell find src -iname "*.h")
-DEPS = $(foreach SHL,$(SHARED_LIBPATHS),$(SHL:%=%/lib/lib$(notdir $(SHL)).so)) \
-	$(foreach STL,$(STATIC_LIBPATHS),$(STL:%=%/lib/lib$(notdir $(STL)).a))
+$(OBJ_DIR)/query.o: $(SRC_DIR)/query.c $(INCLUDE_DIR)/query.h
+	$(CC) $(CFLAGS) -c $(SRC_DIR)/query.c -o $(OBJ_DIR)/query.o
 
-# Set header paths to (-I)nclude
-IDIRS += $(addsuffix /src,$(SHARED_LIBPATHS) $(STATIC_LIBPATHS) .) /usr/local/include
+$(OBJ_DIR)/cliente.o: $(UTILS_DIR)/cliente.c $(UTILS_INCLUDE_DIR)/cliente.h
+	$(CC) $(CFLAGS) -c $(UTILS_DIR)/cliente.c -o $(OBJ_DIR)/cliente.o
 
-# Set library paths to (-L)ook
-LIBDIRS = $(addsuffix /lib,$(SHARED_LIBPATHS) $(STATIC_LIBPATHS)) /usr/local/lib
+$(OBJ_DIR)/server.o: $(UTILS_DIR)/server.c $(UTILS_INCLUDE_DIR)/server.h
+	$(CC) $(CFLAGS) -c $(UTILS_DIR)/server.c -o $(OBJ_DIR)/server.o
 
-# Set shared library paths to be found in runtime (-rpath)
-RUNDIRS = $(SHARED_LIBPATHS:%=$(shell pwd)/%/lib)
+$(OBJ_DIR)/conexion.o: $(UTILS_DIR)/conexion.c $(UTILS_INCLUDE_DIR)/conexion.h
+	$(CC) $(CFLAGS) -c $(UTILS_DIR)/conexion.c -o $(OBJ_DIR)/conexion.o
 
-# Set intermediate objects
-OBJS = $(patsubst src/%.c,obj/%.o,$(SRCS_C))
-
-# Set output
-OUT = $(call outname,$(NAME))
-
-# Set test folder
-TESTS_DIR=tests
-
-# Set test prerrequisites
-TESTS_C += $(shell find $(TESTS_DIR)/ -iname "*.c" 2> /dev/null)
-TESTS_H += $(shell find $(TESTS_DIR)/ -iname "*.h" 2> /dev/null)
-
-# Set test intermediate objects
-TEST_OBJS = $(filter-out $(TEST_EXCLUDE), $(TESTS_C)) $(patsubst src/%.c,obj/%.o,$(filter-out $(TEST_EXCLUDE), $(SRCS_C)))
-
-# Set test binary targets
-TEST = bin/$(NAME)_tests
-
-.PHONY: all
-all: debug
-
-.PHONY: debug
-debug: CFLAGS = $(CDEBUG)
-debug: $(OUT)
-
-.PHONY: release
-release: CFLAGS = $(CRELEASE)
-release: $(OUT)
-
-.PHONY: test
-test: CFLAGS = $(CDEBUG)
-test: $(TEST)
-
-.PHONY: clean
 clean:
-	-rm -rfv $(dir $(TEST) $(OBJS) $(OUT))
-	-for dir in $(SHARED_LIBPATHS) $(STATIC_LIBPATHS); do $(MAKE) -C $$dir clean; done
+	rm -rf $(OBJ_DIR) $(BIN_DIR)
+	rm -f query.log
 
-$(OUT): $(OBJS) | $(dir $(OUT))
-	$(call compile_out)
-
-$(TEST): $(TEST_OBJS) $(DEPS) | $(dir $(TEST))
-	$(CC) $(CFLAGS) -o "$@" $^ $(IDIRS:%=-I%) $(LIBDIRS:%=-L%) $(RUNDIRS:%=-Wl,-rpath,%) $(LIBS:%=-l%) -lcspecs
-
-obj/%.o: src/%.c $(SRCS_H) $(DEPS) | $(dir $(OBJS))
-	$(call compile_objs)
-
-.SECONDEXPANSION:
-$(DEPS): $$(shell find $$(patsubst %lib/,%src/,$$(dir $$@)) -iname "*.c" -or -iname "*.h")
-	$(MAKE) -C $(patsubst %lib/,%,$(dir $@)) 3>&1 1>&2 2>&3 | sed -E 's,(src/)[^ ]+\.(c|h)\:,$(patsubst %lib/,%,$(dir $@))&,' 3>&2 2>&1 1>&3
-
-$(sort $(dir $(OUT) $(OBJS))):
-	mkdir -pv $@
+.PHONY: all clean
