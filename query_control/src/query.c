@@ -52,14 +52,14 @@ void enviar_nueva_query(char* archivo, int prioridad) {
     
     // MOSTRAR MENSAJE CON CONTADOR
     printf("\n");
-    printf("╔════════════════════════════════════════════════╗\n");
-    printf("║          QUERY ENVIADA EXITOSAMENTE            ║\n");
-    printf("╠════════════════════════════════════════════════╣\n");
-    printf("║ Archivo:   %-35s ║\n", archivo);
-    printf("║ Prioridad: %-35d ║\n", prioridad);
-    printf("║                                               ║\n");
-    printf("║ Total de queries enviadas: %-19d ║\n", contador_queries);
-    printf("╚════════════════════════════════════════════════╝\n");
+    printf("════════════════════════════════════════════════\n");
+    printf("          QUERY ENVIADA EXITOSAMENTE            \n");
+    printf("════════════════════════════════════════════════\n");
+    printf(" Archivo:   %-35s \n", archivo);
+    printf(" Prioridad: %-35d \n", prioridad);
+    printf("                                                \n");
+    printf(" Total de queries enviadas: %-19d \n", contador_queries);
+    printf("════════════════════════════════════════════════\n");
     printf("\n");
 }
 
@@ -77,7 +77,7 @@ void* escuchar_respuestas_master(void* args) {
         if (bytes_recibidos <= 0) {
             if (bytes_recibidos == 0) {
                 log_warning(logger, "Master cerró la conexión");
-                printf("\n⚠ Master cerró la conexión\n\n");
+                printf("\n Master cerró la conexión\n\n");
             } else {
                 log_error(logger, "Error al recibir código de operación: %s", 
                          strerror(errno));
@@ -101,14 +101,14 @@ void* escuchar_respuestas_master(void* args) {
                     datos[size] = '\0';
                     
                     printf("\n");
-                    printf("╔════════════════════════════════════════════════╗\n");
-                    printf("║           RESULTADO READ RECIBIDO              ║\n");
-                    printf("╠════════════════════════════════════════════════╣\n");
-                    printf("║ Tamaño: %-38zu ║\n", strlen(datos));
-                    printf("╠════════════════════════════════════════════════╣\n");
-                    printf("║ Datos:                                         ║\n");
-                    printf("║ '%s'%-*s║\n", datos, (int)(46 - strlen(datos)), "");
-                    printf("╚════════════════════════════════════════════════╝\n");
+                    printf("════════════════════════════════════════════════\n");
+                    printf("           RESULTADO READ RECIBIDO              \n");
+                    printf("════════════════════════════════════════════════\n");
+                    printf(" Tamaño: %-38zu \n", strlen(datos));
+                    printf("════════════════════════════════════════════════\n");
+                    printf(" Datos:                                         \n");
+                    printf(" '%s'%-*s\n", datos, (int)(46 - strlen(datos)), "");
+                    printf("════════════════════════════════════════════════\n");
                     printf("\nquery> ");
                     fflush(stdout);
                     
@@ -131,11 +131,11 @@ void* escuchar_respuestas_master(void* args) {
                 motivo[size] = '\0';
                 
                 printf("\n");
-                printf("╔════════════════════════════════════════════════╗\n");
-                printf("║            QUERY FINALIZADA                    ║\n");
-                printf("╠════════════════════════════════════════════════╣\n");
-                printf("║ Estado: %-38s ║\n", motivo);
-                printf("╚════════════════════════════════════════════════╝\n");
+                printf("════════════════════════════════════════════════\n");
+                printf("            QUERY FINALIZADA                    \n");
+                printf("════════════════════════════════════════════════\n");
+                printf(" Estado: %-38s \n", motivo);
+                printf("════════════════════════════════════════════════\n");
                 printf("\nquery> ");
                 fflush(stdout);
                 
@@ -156,11 +156,11 @@ void* escuchar_respuestas_master(void* args) {
                 error[size] = '\0';
                 
                 printf("\n");
-                printf("╔════════════════════════════════════════════════╗\n");
-                printf("║              ERROR EN QUERY                    ║\n");
-                printf("╠════════════════════════════════════════════════╣\n");
-                printf("║ %s%-*s║\n", error, (int)(46 - strlen(error)), "");
-                printf("╚════════════════════════════════════════════════╝\n");
+                printf("════════════════════════════════════════════════\n");
+                printf("              ERROR EN QUERY                    \n");
+                printf("════════════════════════════════════════════════\n");
+                printf(" %s%-*s\n", error, (int)(46 - strlen(error)), "");
+                printf("════════════════════════════════════════════════\n");
                 printf("\nquery> ");
                 fflush(stdout);
                 
@@ -177,9 +177,9 @@ void* escuchar_respuestas_master(void* args) {
                 
                 if (cod_interno > 0 && buffer != NULL) {
                     printf("\n");
-                    printf("┌────────────────────────────────────────────────┐\n");
-                    printf("│       NOTIFICACIÓN: Lectura en progreso        │\n");
-                    printf("└────────────────────────────────────────────────┘\n");
+                    printf("════════════════════════════════════════════════\n");
+                    printf("       NOTIFICACIÓN: Lectura en progreso        \n");
+                    printf("════════════════════════════════════════════════\n");
                     printf("query> ");
                     fflush(stdout);
                     
@@ -275,22 +275,22 @@ void procesar_comando_query(char* comando) {
 
 void mostrar_ayuda(void) {
     printf("\n");
-    printf("╔════════════════════════════════════════════════╗\n");
-    printf("║               COMANDOS DISPONIBLES             ║\n");
-    printf("╠════════════════════════════════════════════════╣\n");
-    printf("║ QUERY <archivo> <prioridad>                    ║\n");
-    printf("║   Envía una nueva query al Master              ║\n");
-    printf("║   Ejemplo: QUERY query_ejemplo.txt 2           ║\n");
-    printf("║                                                ║\n");
-    printf("║ stats                                          ║\n");
-    printf("║   Muestra estadísticas de queries enviadas     ║\n");
-    printf("║                                                ║\n");
-    printf("║ help                                           ║\n");
-    printf("║   Muestra esta ayuda                           ║\n");
-    printf("║                                                ║\n");
-    printf("║ exit | quit                                    ║\n");
-    printf("║   Sale del programa                            ║\n");
-    printf("╚════════════════════════════════════════════════╝\n");
+    printf("════════════════════════════════════════════════\n");
+    printf("               COMANDOS DISPONIBLES             \n");
+    printf("════════════════════════════════════════════════\n");
+    printf(" QUERY <archivo> <prioridad>                    \n");
+    printf("   Envía una nueva query al Master              \n");
+    printf("   Ejemplo: QUERY query_ejemplo.txt 2           \n");
+    printf("                                                \n");
+    printf(" stats                                          \n");
+    printf("   Muestra estadísticas de queries enviadas     \n");
+    printf("                                                \n");
+    printf(" help                                           \n");
+    printf("   Muestra esta ayuda                           \n");
+    printf("                                                \n");
+    printf(" exit | quit                                    \n");
+    printf("   Sale del programa                            \n");
+    printf("════════════════════════════════════════════════\n");
     printf("\n");
 }
 
@@ -397,13 +397,13 @@ int main(int argc, char* argv[]) {
             mostrar_ayuda();
         }else if (strcmp(comando, "stats") == 0) {
             printf("\n");
-            printf("╔════════════════════════════════════════════════╗\n");
-            printf("║              ESTADÍSTICAS                      ║\n");
-            printf("╠════════════════════════════════════════════════╣\n");
-            printf("║ Queries enviadas al Master: %-17d ║\n", contador_queries);
-            printf("║ Conexión activa: %-27s ║\n", 
+            printf("════════════════════════════════════════════════\n");
+            printf("              ESTADÍSTICAS                      \n");
+            printf("════════════════════════════════════════════════\n");
+            printf(" Queries enviadas al Master: %-17d \n", contador_queries);
+            printf(" Conexión activa: %-27s \n", 
                 query_info_global->socket_master > 0 ? "SÍ" : "NO");
-            printf("╚════════════════════════════════════════════════╝\n");
+            printf("════════════════════════════════════════════════\n");
             printf("\n");
         }
         else {

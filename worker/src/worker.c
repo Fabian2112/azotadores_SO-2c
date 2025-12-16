@@ -481,16 +481,32 @@ void enviar_error_a_master(uint32_t query_id, const char* mensaje_error) {
 
 // Ejecutar Query
 void ejecutar_query(t_query* q) {
-    const char* base_path = config_get_string_value(config, "PATH_QUERIES");
     char fullpath[PATH_MAX];
     
-    snprintf(fullpath, sizeof(fullpath), "%s/%s", base_path, q->path);
-
+    // DEBUG: Mostrar información
+    log_info(logger, "DEBUG ejecutar_query:");
+    log_info(logger, "  - Path recibido del master: '%s'", q->path);
+    
+    // Siempre usar el path recibido del master tal cual
+    // El master ya sabe dónde están los archivos de prueba
+    snprintf(fullpath, sizeof(fullpath), "%s", q->path);
+    
+    log_info(logger, "  - Path intentado: '%s'", fullpath);
+    
     FILE* file = fopen(fullpath, "r");
     if (!file) {
         log_error(logger, "No se pudo abrir la query: %s", fullpath);
-        enviar_error_a_master(q->id, "No se pudo abrir archivo de query");
-        return;
+        
+        // Si el path es relativo (comienza con ..), intentar desde directorio actual
+        if (strstr(q->path, "../") == q->path) {
+            // Ya es relativo, intentar como está
+            file = fopen(q->path, "r");
+        }
+        
+        if (!file) {
+            enviar_error_a_master(q->id, "No se pudo abrir archivo de query");
+            return;
+        }
     }
 
     char* line = NULL;

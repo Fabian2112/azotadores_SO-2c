@@ -120,45 +120,81 @@ void actualizar_prioridad_query(t_query* query, int nueva_prioridad) {
     logging_cambio_prioridad(query->query_id, prioridad_anterior, nueva_prioridad);
 }
 
-void desalojar_query_de_worker(t_worker* worker, const char* motivo) {
-    if (!worker->ocupado || worker->query_actual == -1) {
-        log_warning(logger, "Worker %d no tiene query para desalojar", worker->worker_id);
-        return;
+
+// Versión SIN LOCK - usar solo cuando ya se tiene el mutex
+t_query* buscar_query_por_id_unsafe(int query_id) {
+    for (int i = 0; i < list_size(lista_todas_queries); i++) {
+        t_query* query = list_get(lista_todas_queries, i);
+        if (query->query_id == query_id) {
+            return query;
+        }
+    }
+    return NULL;
+}
+
+
+void logging_desalojo(int query_id, int worker_id, int pc_recuperado, const char* motivo) {
+    log_warning(logger, 
+                "[DESALOJO] Query %d desalojada de Worker %d. Motivo: %s. Contexto guardado: PC=%d.",
+                query_id, 
+                worker_id, 
+                motivo,
+                pc_recuperado);
+}
+
+
+void desalojar_query_de_worker(t_worker* worker, const char* motivo_log) {
+    int query_id_desalojada = worker->query_actual;
+    int pc_recuperado = 0;
+
+    log_warning(logger, "🚀 DESALOJANDO Query %d de Worker %d por motivo: %s",
+                query_id_desalojada, worker->worker_id, motivo_log);
+
+    // 1. Enviar señal de desalojo al Worker
+    solicitar_desalojo_worker(worker); // Usa la función provista: envía DESALOJAR_QUERY
+
+    // 2. Recibir el PC (contexto) desde el Worker
+    pc_recuperado = recibir_contexto_desalojo(worker);
+
+    if (pc_recuperado < 0) { // Manejo de error básico si no se recibió un PC válido
+        log_error(logger, "Error: PC inválido (%d) recibido para Query %d. Reiniciando PC a 0.",
+                   pc_recuperado, query_id_desalojada);
+        pc_recuperado = 0;
+    } else {
+        log_info(logger, "PC recuperado para Query %d: %d", 
+                 query_id_desalojada, pc_recuperado);
     }
     
-    log_info(logger, "Iniciando desalojo de Query %d del Worker %d - Motivo: %s", 
-             worker->query_actual, worker->worker_id, motivo);
-    
-    // 1. Solicitar desalojo al Worker    
-    solicitar_desalojo_worker(worker);
-
-    // 2. Recibir Program Counter (PC) del Worker
-    int pc = recibir_contexto_desalojo(worker);
-    
+    // 3. Actualizar el estado de la Query
     pthread_mutex_lock(&mutex_queries);
-    t_query* query = buscar_query_por_id(worker->query_actual);
-    
+    t_query* query = buscar_query_por_id_unsafe(query_id_desalojada);
+
     if (query != NULL) {
-        // 3. Actualizar estado de la query
-        query->pc = pc;  // Guardar PC para reanudar desde aquí
+        // A. Actualizar PC: ESTE ES EL PASO MÁS CRÍTICO
+        query->pc = pc_recuperado; 
+        
+        // B. Devolver a READY
         query->estado = QUERY_READY;
         query->worker_asignado = -1;
-        query->ciclos_en_ready = 0;  // Reiniciar contador de aging
         
-        // 4. Volver a agregar a la lista READY
-        list_add(lista_queries_ready, query);
+        // C. Reingresar a la lista de queries listas (si ya no está, para asegurar su re-planificación)
+        list_add(lista_queries_ready, query); 
+
+        logging_desalojo(query_id_desalojada, worker->worker_id, pc_recuperado, motivo_log);
         
-        log_info(logger, "Query %d desalojada y vuelta a READY (PC=%d)", query->query_id, pc);
-        logging_desalojo_query(query, worker->worker_id, motivo);
     } else {
-        log_error(logger, "No se encontró Query %d para desalojar", worker->query_actual);
+        log_warning(logger, "Query %d no encontrada para desalojo (ya fue finalizada?)", 
+                     query_id_desalojada);
     }
-    
     pthread_mutex_unlock(&mutex_queries);
-    
-    // 5. Liberar el Worker
+
+    // 4. Liberar el Worker para re-asignación inmediata
     worker->ocupado = false;
     worker->query_actual = -1;
+    log_info(logger, "Worker %d liberado y listo para nueva asignación.", worker->worker_id);
+
+    // El hilo llamador (probablemente planificar_siguiente_query o atender_worker)
+    // continuará con la asignación de la query de mayor prioridad.
 }
 
 void debug_mostrar_estado_queries(void) {
@@ -880,17 +916,6 @@ void cancelar_query(t_query* query) {
         }
         finalizar_query(query, "Query Control desconectado");
     }
-}
-
-// Versión SIN LOCK - usar solo cuando ya se tiene el mutex
-t_query* buscar_query_por_id_unsafe(int query_id) {
-    for (int i = 0; i < list_size(lista_todas_queries); i++) {
-        t_query* query = list_get(lista_todas_queries, i);
-        if (query->query_id == query_id) {
-            return query;
-        }
-    }
-    return NULL;
 }
 
 // Versión CON LOCK - usar cuando NO se tiene el mutex
@@ -1783,14 +1808,14 @@ void logging_desconexion_worker(t_worker* worker, int query_id) {
 
 void logging_envio_query(t_query* query, int worker_id) {
     printf("\n");
-    printf("╔════════════════════════════════════════════════╗\n");
-    printf("║            QUERY ENVIADA A WORKER              ║\n");
-    printf("╠════════════════════════════════════════════════╣\n");
-    printf("║ Query ID:      %-31d ║\n", query->query_id);
-    printf("║ Worker ID:     %-31d ║\n", worker_id);
-    printf("║ Prioridad:     %-31d ║\n", query->prioridad);
-    printf("║ Estado:        %-31s ║\n", "READY → EXEC");
-    printf("╚════════════════════════════════════════════════╝\n");
+    printf("════════════════════════════════════════════════\n");
+    printf("            QUERY ENVIADA A WORKER              \n");
+    printf("════════════════════════════════════════════════\n");
+    printf(" Query ID:      %-31d \n", query->query_id);
+    printf(" Worker ID:     %-31d \n", worker_id);
+    printf(" Prioridad:     %-31d \n", query->prioridad);
+    printf(" Estado:        %-31s \n", "READY → EXEC");
+    printf("════════════════════════════════════════════════\n");
     printf("\n");
     
     log_info(logger, "## Se envía la Query %d (%d) al Worker %d",
@@ -1799,16 +1824,16 @@ void logging_envio_query(t_query* query, int worker_id) {
 
 void logging_desalojo_query(t_query* query, int worker_id, const char* motivo) {
     printf("\n");
-    printf("╔════════════════════════════════════════════════╗\n");
-    printf("║              QUERY DESALOJADA                  ║\n");
-    printf("╠════════════════════════════════════════════════╣\n");
-    printf("║ Query ID:      %-31d ║\n", query->query_id);
-    printf("║ Worker ID:     %-31d ║\n", worker_id);
-    printf("║ Prioridad:     %-31d ║\n", query->prioridad);
-    printf("║ PC guardado:   %-31d ║\n", query->pc);
-    printf("║ Motivo:        %-31s ║\n", motivo);
-    printf("║ Estado:        %-31s ║\n", "EXEC → READY");
-    printf("╚════════════════════════════════════════════════╝\n");
+    printf("════════════════════════════════════════════════\n");
+    printf("              QUERY DESALOJADA                  \n");
+    printf("════════════════════════════════════════════════\n");
+    printf(" Query ID:      %-31d \n", query->query_id);
+    printf(" Worker ID:     %-31d \n", worker_id);
+    printf(" Prioridad:     %-31d \n", query->prioridad);
+    printf(" PC guardado:   %-31d \n", query->pc);
+    printf(" Motivo:        %-31s \n", motivo);
+    printf(" Estado:        %-31s \n", "EXEC → READY");
+    printf("════════════════════════════════════════════════\n");
     printf("\n");
     
     log_info(logger, "## Se desaloja la Query %d (%d) del Worker %d - Motivo: %s",
